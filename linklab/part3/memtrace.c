@@ -128,7 +128,7 @@ void *malloc(size_t size) {
 
 void free(void *ptr) {
   char *error;
-  item *freed_block;
+  item *target_block;
 
   if (!freep) {
     freep = dlsym(RTLD_NEXT, "free");
@@ -141,13 +141,22 @@ void free(void *ptr) {
 
   LOG_FREE(ptr);
 
-  freed_block = dealloc(list, ptr);
+  target_block = find(list, ptr);
 
-  if (freed_block != NULL) {
-    n_freeb += freed_block->size;
+  if (target_block != NULL) {
+    if (target_block->cnt < 1) {
+      //double free
+      LOG_DOUBLE_FREE();
+    } else {
+      //normal free
+      --(target_block->cnt);
+      n_freeb += target_block->size;
+      freep(ptr);
+    }
+  } else {
+    //illegal free
+    LOG_ILL_FREE();
   }
-
-  freep(ptr);
 
   return;
 }
