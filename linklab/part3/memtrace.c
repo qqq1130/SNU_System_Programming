@@ -14,7 +14,7 @@
 #include <memlist.h>
 
 /******************************************************
- * 또한 할당 되지 않거나 이미 할당 해제된 메모리에 대한 realloc 함수의 호출은 들어오지 않는다고 가정하시고 문제를 푸셔도 됩니다.
+ * 할당 되지 않거나 이미 할당 해제된 메모리에 대한 realloc 함수의 호출은 들어오지 않는다고 가정하시고 문제를 푸셔도 됩니다.
 *******************************************************/
 
 /**********************
@@ -188,6 +188,7 @@ void *calloc(size_t nmemb, size_t size) {
 void *realloc(void *ptr, size_t size) {
   char *error;
   void *reallocated_ptr;
+  item *target_block;
 
   if (!reallocp) {
     reallocp = dlsym(RTLD_NEXT, "realloc");
@@ -198,15 +199,16 @@ void *realloc(void *ptr, size_t size) {
   }
 
   //deallocate previous block
-  dealloc(list, ptr);
-  n_freeb += size;
+  target_block = dealloc(list, ptr);
+  n_freeb += target_block->size;
 
   //allocate new block
   reallocated_ptr = reallocp(ptr, size);
   alloc(list, reallocated_ptr, size);
+  n_allocb += size;
+
 
   ++n_realloc;
-  n_allocb += size;
 
   LOG_REALLOC(ptr, size, reallocated_ptr);
 
