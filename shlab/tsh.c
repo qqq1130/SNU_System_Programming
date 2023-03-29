@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/signal.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <errno.h>
 
 /* Misc manifest constants */
