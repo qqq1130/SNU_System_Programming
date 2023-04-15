@@ -214,8 +214,8 @@ void eval(char *cmdline)
         setpgid(0, 0);
         wrap_sigprocmask(SIG_UNBLOCK, &mask, NULL);
         
-        if (wrap_execve(argv[0], argv, environ) < 0) {
-            printf("%s: Command not found.\n", argv[0]);
+        if (execve(argv[0], argv, environ) < 0) {
+            printf("%s: Command not found\n", argv[0]);
             exit(0);
         }
     }
@@ -727,15 +727,6 @@ pid_t wrap_fork(void)
     return pid;
 }
 /* $end forkwrapper */
-
-int wrap_execve(const char *filename, char *const argv[], char *const envp[]) 
-{
-    int res;
-    if ( (res = execve(filename, argv, envp)) < 0) {
-        unix_error("Execve error");
-    }
-    return res;
-}
 
 /* $begin wait */
 pid_t wrap_wait(int *status) 
