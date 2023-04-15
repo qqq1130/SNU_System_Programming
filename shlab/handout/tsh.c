@@ -91,26 +91,23 @@ handler_t *Signal(int signum, handler_t *handler);
 /**************************
  * wrapper function prototypes 
  **************************/
-pid_t Fork(void);
-int Execve(const char *filename, char *const argv[], char *const envp[]);
-pid_t Wait(int *status);
-pid_t Waitpid(pid_t pid, int *iptr, int options);
-void Kill(pid_t pid, int signum);
-void Pause();
-unsigned int Sleep(unsigned int secs);
-unsigned int Alarm(unsigned int seconds);
-void Setpgid(pid_t pid, pid_t pgid);
-pid_t Getpgrp(void);
-void Sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
-void Sigemptyset(sigset_t *set);
-void Sigfillset(sigset_t *set);
-void Sigaddset(sigset_t *set, int signum);
-void Sigdelset(sigset_t *set, int signum);
-int Sigismember(const sigset_t *set, int signum);
-int Sigsuspend(const sigset_t *set);
-int Open(const char *pathname, int flags, mode_t mode);
-ssize_t Read(int fd, void *buf, size_t count);
-ssize_t Write(int fd, const void *buf, size_t count);
+pid_t wrap_fork(void);
+int wrap_execve(const char *filename, char *const argv[], char *const envp[]);
+pid_t wrap_wait(int *status);
+pid_t wrap_waitpid(pid_t pid, int *iptr, int options);
+void wrap_kill(pid_t pid, int signum);
+unsigned int wrap_sleep(unsigned int secs);
+void wrap_setpgid(pid_t pid, pid_t pgid);
+void wrap_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+void wrap_sigemptyset(sigset_t *set);
+void wrap_sigfillset(sigset_t *set);
+void wrap_sigaddset(sigset_t *set, int signum);
+void wrap_sigdelset(sigset_t *set, int signum);
+int wrap_sigismember(const sigset_t *set, int signum);
+int wrap_sigsuspend(const sigset_t *set);
+int wrap_open(const char *pathname, int flags, mode_t mode);
+ssize_t wrap_read(int fd, void *buf, size_t count);
+ssize_t wrap_write(int fd, const void *buf, size_t count);
 ssize_t sio_puts(char s[]);
 /*
  * main - The shell's main routine 
@@ -207,17 +204,17 @@ void eval(char *cmdline)
         return;
     }
 
-    Sigemptyset(&mask);
-    Sigaddset(&mask, SIGCHLD);
+    wrap_sigemptyset(&mask);
+    wrap_sigaddset(&mask, SIGCHLD);
 
-    Sigprocmask(SIG_BLOCK, &mask, NULL); //mask SIGCHLD 
+    wrap_sigprocmask(SIG_BLOCK, &mask, NULL); //mask SIGCHLD 
 
-    if ((pid = Fork()) == 0) {
+    if ((pid = wrap_fork()) == 0) {
         // Child's behavior
         setpgid(0, 0);
-        Sigprocmask(SIG_UNBLOCK, &mask, NULL);
+        wrap_sigprocmask(SIG_UNBLOCK, &mask, NULL);
         
-        if (Execve(argv[0], argv, environ) < 0) {
+        if (wrap_execve(argv[0], argv, environ) < 0) {
             printf("%s: Command not found.\n", argv[0]);
             exit(0);
         }
@@ -226,11 +223,11 @@ void eval(char *cmdline)
     // Parent's behavior
     if (!bg) {
         addjob(jobs, pid, FG, cmdline);
-        Sigprocmask(SIG_UNBLOCK, &mask, NULL);
+        wrap_sigprocmask(SIG_UNBLOCK, &mask, NULL);
         waitfg(pid); /* wait for the foreground job to finish */
     } else {
         addjob(jobs, pid, BG, cmdline); 
-        Sigprocmask(SIG_UNBLOCK, &mask, NULL);
+        wrap_sigprocmask(SIG_UNBLOCK, &mask, NULL);
         printf("[%d] (%d) %s", pid2jid(pid), (int)pid, cmdline); /* print out log and execute in background */
     }
 
@@ -372,7 +369,7 @@ void do_bgfg(char **argv)
             printf("(%s): No such process\n", argv[1]);
         }
     } else {
-        Kill(-job->pid, SIGCONT); /* send SIGCONT signal to every process under process group */
+        wrap_kill(-job->pid, SIGCONT); /* send SIGCONT signal to every process under process group */
 
         if (is_bg) { // command: bg
             job->state = BG;
@@ -399,7 +396,7 @@ void waitfg(pid_t pid)
         if (fgpid(jobs) != pid) { /* when given foreground job terminated */
             break;
         } else {
-            Sleep(1);
+            wrap_sleep(1);
         }
     }
 
@@ -427,7 +424,7 @@ void sigchld_handler(int sig)
 
     /* WNOHANG: return immediately if none of the child processes in the wait set has terminated yet.
        WUNTRACED: return pid of the terminated or "stopped" child */
-    while((pid = Waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+    while((pid = wrap_waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         job = getjobpid(jobs, pid);
 
         if (WIFSIGNALED(status)) {
@@ -466,7 +463,7 @@ void sigint_handler(int sig)
 
     if (foreground_pid != 0) {
         /* if there is a foreground job, send SIGINT */
-        Kill(-foreground_pid, sig);
+        wrap_kill(-foreground_pid, sig);
     }
 
     errno = prev_errno;
@@ -486,7 +483,7 @@ void sigtstp_handler(int sig)
 
     if (foreground_pid != 0) {
         /* if there is a foreground job, send SIGTSTP */
-        Kill(-foreground_pid, sig);
+        wrap_kill(-foreground_pid, sig);
     }
 
     errno = prev_errno;
@@ -695,11 +692,13 @@ handler_t *Signal(int signum, handler_t *handler)
     struct sigaction action, old_action;
 
     action.sa_handler = handler;  
-    sigemptyset(&action.sa_mask); /* block sigs of type being handled */
+    wrap_sigemptyset(&action.sa_mask); /* block sigs of type being handled */
     action.sa_flags = SA_RESTART; /* restart syscalls if possible */
 
-    if (sigaction(signum, &action, &old_action) < 0)
-	unix_error("Signal error");
+    if (sigaction(signum, &action, &old_action) < 0) {
+        printf("Signal error");
+    }
+	
     return (old_action.sa_handler);
 }
 
@@ -718,43 +717,45 @@ void sigquit_handler(int sig)
  ********************************************/
 
 /* $begin forkwrapper */
-pid_t Fork(void) 
+pid_t wrap_fork(void) 
 {
     pid_t pid;
 
-    if ((pid = fork()) < 0)
-	unix_error("Fork error");
+    if ((pid = fork()) < 0) {
+        printf("Fork error");
+    }
     return pid;
 }
 /* $end forkwrapper */
 
-int Execve(const char *filename, char *const argv[], char *const envp[]) 
+int wrap_execve(const char *filename, char *const argv[], char *const envp[]) 
 {
     int res;
     if ( (res = execve(filename, argv, envp)) < 0) {
-        unix_error("Execve error");
+        printf("Execve error");
     }
     return res;
 }
 
 /* $begin wait */
-pid_t Wait(int *status) 
+pid_t wrap_wait(int *status) 
 {
     pid_t pid;
 
-    if ((pid  = wait(status)) < 0)
-	unix_error("Wait error");
+    if ((pid  = wait(status)) < 0) {
+	    printf("Wait error");
+    }
     return pid;
 }
 /* $end wait */
 
-pid_t Waitpid(pid_t pid, int *iptr, int options) 
+pid_t wrap_waitpid(pid_t pid, int *iptr, int options) 
 {
     pid_t retpid;
 
     if ((retpid  = waitpid(pid, iptr, options)) < 0) {
         if (errno != ECHILD) {
-	        unix_error("Waitpid error");
+	        printf("Waitpid error");
         }
     }
 
@@ -762,48 +763,50 @@ pid_t Waitpid(pid_t pid, int *iptr, int options)
 }
 
 /* $begin kill */
-void Kill(pid_t pid, int signum) 
+void wrap_kill(pid_t pid, int signum) 
 {
     int rc;
 
     if ((rc = kill(pid, signum)) < 0) {
         if (signum == SIGINT) {
-	        unix_error("Kill error at SIGINT");
+	        printf("Kill error at SIGINT");
         } else if (signum == SIGTSTP) {
-            unix_error("Kill error at SIGTSTP");
+            printf("Kill error at SIGTSTP");
         }
     }
 }
 /* $end kill */
 
-void Pause() 
+void wrap_pause() 
 {
     (void)pause();
     return;
 }
 
-unsigned int Sleep(unsigned int secs) 
+unsigned int wrap_sleep(unsigned int secs) 
 {
     unsigned int rc;
 
-    if ((rc = sleep(secs)) < 0)
-	unix_error("Sleep error");
+    if ((rc = sleep(secs)) < 0) {
+        printf("sleep error");
+    }
     return rc;
 }
 
-unsigned int Alarm(unsigned int seconds) {
+unsigned int wrap_alarm(unsigned int seconds) {
     return alarm(seconds);
 }
  
-void Setpgid(pid_t pid, pid_t pgid) {
+void wrap_setpgid(pid_t pid, pid_t pgid) {
     int rc;
 
-    if ((rc = setpgid(pid, pgid)) < 0)
-	unix_error("Setpgid error");
+    if ((rc = setpgid(pid, pgid)) < 0) {
+	    printf("Setpgid error");
+    }
     return;
 }
 
-pid_t Getpgrp(void) {
+pid_t wrap_getpgrp(void) {
     return getpgrp();
 }
 
@@ -811,61 +814,62 @@ pid_t Getpgrp(void) {
  * Wrappers for Unix signal functions 
  ***********************************/
 
-void Sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
+void wrap_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
-    if (sigprocmask(how, set, oldset) < 0)
-	unix_error("Sigprocmask error");
-    return;
-}
-
-void Sigemptyset(sigset_t *set)
-{
-    if (sigemptyset(set) < 0) {
-        unix_error("Sigemptyset error");
+    if (sigprocmask(how, set, oldset) < 0) {
+        printf("Sigprocmask error");
     }
     return;
 }
 
-void Sigfillset(sigset_t *set)
+void wrap_sigemptyset(sigset_t *set)
+{
+    if (sigemptyset(set) < 0) {
+        printf("Sigemptyset error");
+    }
+    return;
+}
+
+void wrap_sigfillset(sigset_t *set)
 { 
     if (sigfillset(set) < 0) {
-        unix_error("Sigfillset error");
+        printf("Sigfillset error");
     }
 	
     return;
 }
 
-void Sigaddset(sigset_t *set, int signum)
+void wrap_sigaddset(sigset_t *set, int signum)
 {
     if (sigaddset(set, signum) < 0) {
-        unix_error("Sigaddset error");
+        printf("Sigaddset error");
     }
     return;
 }
 
-void Sigdelset(sigset_t *set, int signum)
+void wrap_sigdelset(sigset_t *set, int signum)
 {
     if (sigdelset(set, signum) < 0) {
-        unix_error("Sigdelset error");
+        printf("Sigdelset error");
     }
     return;
 }
 
-int Sigismember(const sigset_t *set, int signum)
+int wrap_sigismember(const sigset_t *set, int signum)
 {
     int rc;
     if ((rc = sigismember(set, signum)) < 0) {
-        unix_error("Sigismember error");
+        printf("Sigismember error");
     }
 	
     return rc;
 }
 
-int Sigsuspend(const sigset_t *set)
+int wrap_sigsuspend(const sigset_t *set)
 {
     int rc = sigsuspend(set); /* always returns -1 */
     if (errno != EINTR) {
-        unix_error("Sigsuspend error");
+        printf("Sigsuspend error");
     }
     return rc;
 }
@@ -874,34 +878,34 @@ int Sigsuspend(const sigset_t *set)
  * Wrappers for Unix I/O routines
  ********************************/
 
-int Open(const char *pathname, int flags, mode_t mode) 
+int wrap_open(const char *pathname, int flags, mode_t mode) 
 {
     int rc;
 
     if ((rc = open(pathname, flags, mode))  < 0) {
-        unix_error("Open error");
+        printf("Open error");
     }
 	
     return rc;
 }
 
-ssize_t Read(int fd, void *buf, size_t count) 
+ssize_t wrap_read(int fd, void *buf, size_t count) 
 {
     ssize_t rc;
 
     if ((rc = read(fd, buf, count)) < 0) {
-        unix_error("Read error");
+        printf("Read error");
     }
 	
     return rc;
 }
 
-ssize_t Write(int fd, const void *buf, size_t count) 
+ssize_t wrap_write(int fd, const void *buf, size_t count) 
 {
     ssize_t rc;
 
     if ((rc = write(fd, buf, count)) < 0) {
-        unix_error("Write error");
+        printf("Write error");
     }
 	
     return rc;
@@ -918,5 +922,5 @@ static size_t sio_strlen(char s[])
 
 ssize_t sio_puts(char s[]) /* Put string */
 {
-    return Write(STDOUT_FILENO, s, sio_strlen(s));
+    return wrap_write(STDOUT_FILENO, s, sio_strlen(s));
 }
