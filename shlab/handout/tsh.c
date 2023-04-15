@@ -696,7 +696,7 @@ handler_t *Signal(int signum, handler_t *handler)
     action.sa_flags = SA_RESTART; /* restart syscalls if possible */
 
     if (sigaction(signum, &action, &old_action) < 0) {
-        printf("Signal error");
+        unix_error("Signal error");
     }
 	
     return (old_action.sa_handler);
@@ -722,7 +722,7 @@ pid_t wrap_fork(void)
     pid_t pid;
 
     if ((pid = fork()) < 0) {
-        printf("Fork error");
+        unix_error("Fork error");
     }
     return pid;
 }
@@ -732,7 +732,7 @@ int wrap_execve(const char *filename, char *const argv[], char *const envp[])
 {
     int res;
     if ( (res = execve(filename, argv, envp)) < 0) {
-        printf("Execve error");
+        unix_error("Execve error");
     }
     return res;
 }
@@ -743,7 +743,7 @@ pid_t wrap_wait(int *status)
     pid_t pid;
 
     if ((pid  = wait(status)) < 0) {
-	    printf("Wait error");
+	    unix_error("Wait error");
     }
     return pid;
 }
@@ -755,7 +755,7 @@ pid_t wrap_waitpid(pid_t pid, int *iptr, int options)
 
     if ((retpid  = waitpid(pid, iptr, options)) < 0) {
         if (errno != ECHILD) {
-	        printf("Waitpid error");
+	        unix_error("Waitpid error");
         }
     }
 
@@ -769,9 +769,9 @@ void wrap_kill(pid_t pid, int signum)
 
     if ((rc = kill(pid, signum)) < 0) {
         if (signum == SIGINT) {
-	        printf("Kill error at SIGINT");
+	        unix_error("Kill error at SIGINT");
         } else if (signum == SIGTSTP) {
-            printf("Kill error at SIGTSTP");
+            unix_error("Kill error at SIGTSTP");
         }
     }
 }
@@ -788,7 +788,7 @@ unsigned int wrap_sleep(unsigned int secs)
     unsigned int rc;
 
     if ((rc = sleep(secs)) < 0) {
-        printf("sleep error");
+        unix_error("sleep error");
     }
     return rc;
 }
@@ -801,7 +801,7 @@ void wrap_setpgid(pid_t pid, pid_t pgid) {
     int rc;
 
     if ((rc = setpgid(pid, pgid)) < 0) {
-	    printf("Setpgid error");
+	    unix_error("Setpgid error");
     }
     return;
 }
@@ -817,7 +817,7 @@ pid_t wrap_getpgrp(void) {
 void wrap_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
     if (sigprocmask(how, set, oldset) < 0) {
-        printf("Sigprocmask error");
+        unix_error("Sigprocmask error");
     }
     return;
 }
@@ -825,7 +825,7 @@ void wrap_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 void wrap_sigemptyset(sigset_t *set)
 {
     if (sigemptyset(set) < 0) {
-        printf("Sigemptyset error");
+        unix_error("Sigemptyset error");
     }
     return;
 }
@@ -833,7 +833,7 @@ void wrap_sigemptyset(sigset_t *set)
 void wrap_sigfillset(sigset_t *set)
 { 
     if (sigfillset(set) < 0) {
-        printf("Sigfillset error");
+        unix_error("Sigfillset error");
     }
 	
     return;
@@ -842,7 +842,7 @@ void wrap_sigfillset(sigset_t *set)
 void wrap_sigaddset(sigset_t *set, int signum)
 {
     if (sigaddset(set, signum) < 0) {
-        printf("Sigaddset error");
+        unix_error("Sigaddset error");
     }
     return;
 }
@@ -850,7 +850,7 @@ void wrap_sigaddset(sigset_t *set, int signum)
 void wrap_sigdelset(sigset_t *set, int signum)
 {
     if (sigdelset(set, signum) < 0) {
-        printf("Sigdelset error");
+        unix_error("Sigdelset error");
     }
     return;
 }
@@ -859,7 +859,7 @@ int wrap_sigismember(const sigset_t *set, int signum)
 {
     int rc;
     if ((rc = sigismember(set, signum)) < 0) {
-        printf("Sigismember error");
+        unix_error("Sigismember error");
     }
 	
     return rc;
@@ -869,7 +869,7 @@ int wrap_sigsuspend(const sigset_t *set)
 {
     int rc = sigsuspend(set); /* always returns -1 */
     if (errno != EINTR) {
-        printf("Sigsuspend error");
+        unix_error("Sigsuspend error");
     }
     return rc;
 }
@@ -883,7 +883,7 @@ int wrap_open(const char *pathname, int flags, mode_t mode)
     int rc;
 
     if ((rc = open(pathname, flags, mode))  < 0) {
-        printf("Open error");
+        unix_error("Open error");
     }
 	
     return rc;
@@ -894,7 +894,7 @@ ssize_t wrap_read(int fd, void *buf, size_t count)
     ssize_t rc;
 
     if ((rc = read(fd, buf, count)) < 0) {
-        printf("Read error");
+        unix_error("Read error");
     }
 	
     return rc;
@@ -905,7 +905,7 @@ ssize_t wrap_write(int fd, const void *buf, size_t count)
     ssize_t rc;
 
     if ((rc = write(fd, buf, count)) < 0) {
-        printf("Write error");
+        unix_error("Write error");
     }
 	
     return rc;
