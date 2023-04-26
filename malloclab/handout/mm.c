@@ -93,14 +93,15 @@ static void mm_check();
 /* number of segregated list */
 #define NUM_SEG_LIST 10
 
-/* set prev, next for free block given bp */
-
-#define SET_NEXT_PTR(bp, addr) (*((unsigned int *) bp) = (unsigned int) (addr))
-#define SET_PREV_PTR(bp, addr) (*(((unsigned int *) bp) + 1) = (unsigned int) (addr))
-
 /* get prev, next for free block given bp */
-#define GET_NEXT_PTR(bp) ((void *)(*((unsigned int *) bp)))
-#define GET_PREV_PTR(bp) ((void *) (*(((unsigned int *) bp) + 1)))
+#define GET_PREV_PTR(bp) (*((unsigned int *) bp))
+#define GET_NEXT_PTR(bp) (*(((unsigned int *) bp) + 1))
+
+/* set prev, next for free block given bp */
+#define SET_PREV_PTR(bp, addr) (GET_PREV_PTR(bp) = (unsigned int) (addr))
+#define SET_NEXT_PTR(bp, addr) (GET_NEXT_PTR(bp) = (unsigned int) (addr))
+
+
 
 /* heap consistency checker */
 #define MM_CHECK mm_check()
@@ -112,7 +113,7 @@ static void mm_check();
 /* pointer which points to middle of the prologue block */
 static char *heap_listp;
 /* segregated list to manage free blocks */
-static void *seg_list[NUM_SEG_LIST];
+static void *free_list_tail;
 
 // ***********************************************************
 // helper functions start
@@ -180,84 +181,95 @@ static void* coalesce(void *bp)
  */
 static void *allocate(void *bp, size_t blk_size)
 {
-    size_t curr_blk_size = GET_SIZE(HDRP(bp));
+    size_t csize = GET_SIZE(HDRP(bp));
 
-    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) {
-        PUT_W(HDRP(bp), PACK(blk_size, 1));
-        PUT_W(FTRP(bp), PACK(blk_size, 1));
-        char *next_blkp = NEXT_BLKP(bp);
-        PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
-        PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
-        insert_node(next_blkp, curr_blk_size - blk_size);
-    } else {
-        PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
-        PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
-    }
+	/* Remove a node with starting address bp from the free list */
+	remove_node(bp);
 
-    return bp;
+	/* Don't split and just use the block */
+	if ((csize - blk_size) <= (2*DSIZE)) {
+		PUT_W(HDRP(bp), PACK(csize, 1)); 
+		PUT_W(FTRP(bp), PACK(csize, 1)); 
+	}
+
+	/* Allocate large block from the back of the free block */
+	else if (blk_size >= 100) {
+		PUT_W(HDRP(bp), PACK(csize-blk_size, 0));
+		PUT_W(FTRP(bp), PACK(csize-blk_size, 0));
+		PUT_W(HDRP(NEXT_BLKP(bp)), PACK(blk_size, 1));
+		PUT_W(FTRP(NEXT_BLKP(bp)), PACK(blk_size, 1));
+		insert_node(bp, csize-blk_size);
+		return NEXT_BLKP(bp);
+	}
+	
+	/* Allocate small block from the front of the free block */
+	else {
+		PUT_W(HDRP(bp), PACK(blk_size, 1)); 
+		PUT_W(FTRP(bp), PACK(blk_size, 1)); 
+		PUT_W(HDRP(NEXT_BLKP(bp)), PACK(csize-blk_size, 0)); 
+		PUT_W(FTRP(NEXT_BLKP(bp)), PACK(csize-blk_size, 0)); 
+		insert_node(NEXT_BLKP(bp), csize-blk_size);
+	}
+
+	return bp;
 }
 
 /* add freed block at bp with size blk_size to appropriate seglist */
 static void insert_node(void *bp, size_t blk_size) 
 {
-    int list = 0;
-    size_t size = blk_size;
+    void *prev = free_list_tail;
+	void *next = NULL;
 
-    size >>= 4; // minimum block size is 16
-
-    for (; list < NUM_SEG_LIST - 1; ++list) {
-        if (size <= 1) {
-            break;
+    /* small size blocks come at the tail of the free list */
+    while (prev && (blk_size > GET_SIZE(HDRP(prev)))) {
+        next = prev;
+        prev = (void *)GET_PREV_PTR(prev);
+    }
+    
+    if (prev) {
+        if (next) {
+            SET_NEXT_PTR(bp, next);
+            SET_PREV_PTR(bp, prev);
+            SET_NEXT_PTR(prev, bp);
+            SET_PREV_PTR(next, bp);
+        } else {
+            /* bp is smallest. add to the tail of the free list */
+            SET_NEXT_PTR(bp, NULL);
+            SET_PREV_PTR(bp, prev);
+            SET_NEXT_PTR(prev, bp);
+            free_list_tail = bp;
         }
-
-        size >>= 1;
+    } else {
+        if (next) {
+            /* bp is biggest. add at the head of the free list */
+            SET_PREV_PTR(bp, NULL);
+            SET_NEXT_PTR(bp, next);
+            SET_PREV_PTR(next, bp);
+        } else {
+            free_list_tail = bp;
+            SET_NEXT_PTR(bp, NULL);
+            SET_PREV_PTR(bp, NULL);
+        }
     }
-
-    void **seglist_start = &seg_list[list];
-    void *new_node = bp;
-    void *next_node = seg_list[list];
-
-    SET_PREV_PTR(new_node, seglist_start);
-    SET_NEXT_PTR(new_node, next_node);
-    SET_NEXT_PTR(seglist_start, new_node); 
-
-    if (next_node) {
-        SET_PREV_PTR(next_node, new_node);
-    }
-    return;
 
 }
 
 /* select free block of size blk_size to allocate */
 static void *find_fitting_blk(size_t blk_size) 
 {
-    int list = 0;
-    size_t size = blk_size;
+    char* bp = free_list_tail;
+
+    while(bp && (blk_size > GET_SIZE(HDRP(bp)))) {
+        bp = (char *)GET_PREV_PTR(bp);
+    }
+    if (!bp) { //no matching block found 
+        int extend_size = MAX(blk_size, CHUNKSIZE);
+        return extend_heap(extend_size/WSIZE);
+    } else { //found
+        return bp;
+    }
+
     
-    size >>= 4; /* minimum size of a free block is 16. */
-
-    while ((list < NUM_SEG_LIST - 1) && (size > 1)) {
-        size >>= 1;
-        ++list;
-    }
-
-    while (list < NUM_SEG_LIST) {
-        void *curr = seg_list[list];
-
-        while (curr) {
-            if (GET_SIZE(HDRP(curr)) > blk_size) {
-                return curr;
-            }
-
-            curr = GET_NEXT_PTR(curr);
-        }
-
-        ++list;
-    }
-
-    /* reaching here == block not found */
-    int extend_size = MAX(blk_size, CHUNKSIZE);
-    return extend_heap(extend_size/WSIZE);
 }
 
 /*
@@ -265,14 +277,21 @@ removing node from linked list (segregated list)
 */
 static void remove_node(void *bp) 
 {
-    void *prev_node = GET_PREV_PTR(bp);
-    void *next_node = GET_NEXT_PTR(bp);
-
-    SET_NEXT_PTR(prev_node, next_node);
-
-    if (next_node) {
-        SET_PREV_PTR(next_node, prev_node);
-    }
+    if (GET_PREV_PTR(bp)) {
+		if (GET_NEXT_PTR(bp)) {
+            SET_NEXT_PTR(GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
+            SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
+		} else {
+            SET_NEXT_PTR(GET_PREV_PTR(bp), NULL);
+			free_list_tail = GET_PREV_PTR(bp);
+		}
+	} else {
+		if (GET_NEXT_PTR(bp)) {
+            SET_PREV_PTR(GET_NEXT_PTR(bp), NULL);
+        } else {
+			free_list_tail = NULL;
+        }
+	}
 }
 
 // ***********************************************************
@@ -288,15 +307,14 @@ int mm_init(void)
         return -1;
     }
 
-    for (int i = 0; i < NUM_SEG_LIST; ++i) {
-        seg_list[i] = NULL;
-    }
-
     PUT_W(heap_listp, 0);
     PUT_W(heap_listp + WSIZE, PACK(DSIZE, 1));
     PUT_W(heap_listp + 2 * WSIZE, PACK(DSIZE, 1));
     PUT_W(heap_listp + 3 * WSIZE, PACK(0, 1));
     heap_listp += DSIZE;
+
+    /* initialize free_list */
+    free_list_tail = NULL;
 
     void *bp; 
 
@@ -325,7 +343,6 @@ void *mm_malloc(size_t size)
         return NULL;
     }
 
-    remove_node(bp);
     return allocate(bp, adjusted_size);
 }
 
@@ -392,29 +409,7 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 static void mm_check() {
-    printf("===========================\n");
-    printf("[Log] mm_check start\n");
-    // iterate through the seglist, print out the blocks in each of it
-    for (int list = 0; list < NUM_SEG_LIST; ++list) {
-        printf("[List #%d] %p : ", list, &seg_list[list]);
 
-        if (!seg_list[list]) {
-            printf("empty list\n");
-            continue;
-        }
-        void *curr = seg_list[list];
-        
-        while(curr) {
-            printf("[curr_address: %p, curr_allocated: %d, blk_size: %d, prev: %p, next: %p]", curr, GET_ISALLOCATED(HDRP(curr)), GET_SIZE(HDRP(curr)), GET_PREV_PTR(curr), GET_NEXT_PTR(curr));
-            curr = GET_NEXT_PTR(curr);
-            if (curr) {
-                printf(" -> ");
-            } else {
-                printf("\n");
-            }
-        }
-    }
-    printf("===========================\n");
 }
 
 
