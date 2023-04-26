@@ -16,7 +16,6 @@ static void *allocate(void *bp, size_t blk_size);
 static void insert_node(void *bp, size_t blk_size);
 static void *find_fitting_blk(size_t blk_size);
 static void remove_node(void *bp);
-static void mm_check();
 
 
 // ***********************************************************
@@ -73,10 +72,15 @@ static void mm_check();
 #define SET_PREV_PTR(bp, addr) (GET_PREV_PTR(bp) = (unsigned int) (addr))
 #define SET_NEXT_PTR(bp, addr) (GET_NEXT_PTR(bp) = (unsigned int) (addr))
 
+#define DEBUG
 
-
+#ifdef DEBUG
 /* heap consistency checker */
 #define MM_CHECK mm_check()
+static int mm_check();
+#else
+#define MM_CHECK
+#endif
 
 // ***********************************************************
 // global static variables
@@ -369,6 +373,8 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-static void mm_check() {
+#ifdef DEBUG
+static int mm_check() {
 
 }
+#endif
