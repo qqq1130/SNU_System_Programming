@@ -1,14 +1,3 @@
-/*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
- * 
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
- *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -17,23 +6,6 @@
 
 #include "mm.h"
 #include "memlib.h"
-
-/*********************************************************
- * NOTE TO STUDENTS: Before you do anything else, please
- * provide your team information in the following struct.
- ********************************************************/
-team_t team = {
-    /* Team name */
-    "Self-Studying",
-    /* First member's full name */
-    "CSH",
-    /* First member's email address */
-    "shyeokchoi@gmail.com",
-    /* Second member's full name (leave blank if none) */
-    "",
-    /* Second member's email address (leave blank if none) */
-    ""
-};
 
 // ***********************************************************
 // helper function prototypes
@@ -181,37 +153,23 @@ static void* coalesce(void *bp)
  */
 static void *allocate(void *bp, size_t blk_size)
 {
-    size_t csize = GET_SIZE(HDRP(bp));
+    remove_node(bp);
 
-	/* Remove a node with starting address bp from the free list */
-	remove_node(bp);
+    size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
-	/* Don't split and just use the block */
-	if ((csize - blk_size) <= (2*DSIZE)) {
-		PUT_W(HDRP(bp), PACK(csize, 1)); 
-		PUT_W(FTRP(bp), PACK(csize, 1)); 
-	}
+    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) {
+        PUT_W(HDRP(bp), PACK(blk_size, 1));
+        PUT_W(FTRP(bp), PACK(blk_size, 1));
+        char *next_blkp = NEXT_BLKP(bp);
+        PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
+        PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
+        insert_node(next_blkp, curr_blk_size - blk_size);
+    } else {
+        PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
+        PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
+    }
 
-	/* Allocate large block from the back of the free block */
-	else if (blk_size >= 100) {
-		PUT_W(HDRP(bp), PACK(csize-blk_size, 0));
-		PUT_W(FTRP(bp), PACK(csize-blk_size, 0));
-		PUT_W(HDRP(NEXT_BLKP(bp)), PACK(blk_size, 1));
-		PUT_W(FTRP(NEXT_BLKP(bp)), PACK(blk_size, 1));
-		insert_node(bp, csize-blk_size);
-		return NEXT_BLKP(bp);
-	}
-	
-	/* Allocate small block from the front of the free block */
-	else {
-		PUT_W(HDRP(bp), PACK(blk_size, 1)); 
-		PUT_W(FTRP(bp), PACK(blk_size, 1)); 
-		PUT_W(HDRP(NEXT_BLKP(bp)), PACK(csize-blk_size, 0)); 
-		PUT_W(FTRP(NEXT_BLKP(bp)), PACK(csize-blk_size, 0)); 
-		insert_node(NEXT_BLKP(bp), csize-blk_size);
-	}
-
-	return bp;
+    return bp;
 }
 
 /* add freed block at bp with size blk_size to appropriate seglist */
@@ -268,8 +226,6 @@ static void *find_fitting_blk(size_t blk_size)
     } else { //found
         return bp;
     }
-
-    
 }
 
 /*
@@ -283,7 +239,7 @@ static void remove_node(void *bp)
             SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
 		} else {
             SET_NEXT_PTR(GET_PREV_PTR(bp), NULL);
-			free_list_tail = GET_PREV_PTR(bp);
+			free_list_tail = (void *) GET_PREV_PTR(bp);
 		}
 	} else {
 		if (GET_NEXT_PTR(bp)) {
@@ -375,7 +331,7 @@ void *mm_realloc(void *ptr, size_t size)
 		return NULL;
     }
 
-	/* get new block size to match alignment conditions */
+    /* for alignment conditions */
 	if (size <= DSIZE) {
         new_blk_size = 2*DSIZE;
     } else {
@@ -383,23 +339,28 @@ void *mm_realloc(void *ptr, size_t size)
     }
 
 	if (GET_SIZE(HDRP(ptr)) < new_blk_size) {
-		/* if the next block is free or epilogue block */
-		if (!GET_ISALLOCATED(HDRP(NEXT_BLKP(ptr))) || GET_SIZE(HDRP(NEXT_BLKP(ptr))) == 0) {
-			remaining_size = GET_SIZE(HDRP(ptr)) + GET_SIZE(HDRP(NEXT_BLKP(ptr))) - new_blk_size;
+        remaining_size = GET_SIZE(HDRP(ptr)) + GET_SIZE(HDRP(NEXT_BLKP(ptr))) - new_blk_size;
 
-			if (remaining_size < 0) { /* extend heap */
+		if (!GET_ISALLOCATED(HDRP(NEXT_BLKP(ptr)))) { /* if next block free */
+			if (remaining_size >= 0) {
+                remove_node(NEXT_BLKP(ptr));
+                PUT_W(HDRP(ptr), PACK(new_blk_size + remaining_size, 1));
+                PUT_W(FTRP(ptr), PACK(new_blk_size + remaining_size, 1));
+            }
+		} else if (GET_SIZE(HDRP(ptr)) == 0) {
+            if (remaining_size < 0) { /* extend heap */
 				extend_size = MAX(-remaining_size, CHUNKSIZE);
 				if (extend_heap(extend_size/WSIZE) == NULL) {
                     return NULL;
                 }
-				remaining_size += extend_size;
-			}
+            }
 
-			remove_node(NEXT_BLKP(ptr));
-			PUT_W(HDRP(ptr), PACK(new_blk_size + remaining_size, 1)); 
-			PUT_W(FTRP(ptr), PACK(new_blk_size + remaining_size, 1)); 
-		} else {
-			newptr = mm_malloc(new_blk_size - DSIZE);
+            remaining_size += extend_size; /* now, new_blk_size + remaining_size == (initial size of the block) + (extended size) */
+
+            PUT_W(HDRP(ptr), PACK(new_blk_size + remaining_size, 1)); 
+            PUT_W(FTRP(ptr), PACK(new_blk_size + remaining_size, 1)); 
+        } else {
+			newptr = mm_malloc(new_blk_size - DSIZE); /* -DSIZE for header and footer */
 			memcpy(newptr, ptr, MIN(size, new_blk_size));
 			mm_free(ptr);
 		}
@@ -411,16 +372,3 @@ void *mm_realloc(void *ptr, size_t size)
 static void mm_check() {
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
