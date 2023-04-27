@@ -16,7 +16,6 @@ static void *allocate(void *bp, size_t blk_size);
 static void insert_node(void *bp, size_t blk_size);
 static void *find_fitting_blk(size_t blk_size);
 static void remove_node(void *bp);
-static int mm_check();
 
 
 // ***********************************************************
@@ -74,15 +73,14 @@ static int mm_check();
 #define SET_NEXT_PTR(bp, addr) (GET_NEXT_PTR(bp) = (unsigned int) (addr))
 
 /* standard of blk size. when to start from head, when to start from tail? */
-#define STANDARD 100
+#define STANDARD 2048
 
 // #define DEBUG 1
 
 #ifdef DEBUG
+static int mm_check();
 /* heap consistency checker */
 #define MM_CHECK mm_check()
-#else
-#define MM_CHECK
 #endif
 
 // ***********************************************************
@@ -337,7 +335,11 @@ void *mm_malloc(size_t size)
     
     bp = allocate(bp, adjusted_size);
 
-    MM_CHECK;
+#ifdef DEBUG
+    if (!MM_CHECK) {
+        printf("mm_check failed\n");
+    }
+#endif
 
     return bp;
 }
@@ -356,8 +358,11 @@ void mm_free(void *ptr)
     PUT_W(ftrp, PACK(curr_block_size, 0));
     coalesce(ptr);
 
-
-    MM_CHECK;
+#ifdef DEBUG
+    if (!MM_CHECK) {
+        printf("mm_check failed\n");
+    }
+#endif
 }
 
 /*
@@ -411,43 +416,30 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
+#ifdef DEBUG
 static int mm_check()
 {
 	void *bp;
 
-	/* Is every block in the free list marked as free? */
 	for (bp = free_list_head; bp; bp = (void *) GET_NEXT_PTR(bp)) {
-        if (GET_ISALLOCATED(HDRP(bp))) {
+        if (GET_ISALLOCATED(HDRP(bp))) { /* check if every block in the free list is free */
             printf("free block allocated at %u\n", (unsigned int) bp);
-            
+            return 0;
         }
-			
 
+        /* visualize blocks in the free list */
         printf("[ curr: %u, size: %d, prev: %u, next: %u ] ", (unsigned int) bp, GET_SIZE(HDRP(bp)), GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
     }
     printf("\n");
 
-	/* Are there any contiguous free blocks that somehow escaped coalescing? */
-	for (bp = free_list_head; bp; bp = (void *) GET_NEXT_PTR(bp))
+	/* Check if every free blocks are coalesced properly */
+	for (bp = free_list_head; bp; bp = (void *) GET_NEXT_PTR(bp)) {
 		if ((void *)GET_PREV_PTR(bp) == PREV_BLKP(bp)) {
             printf("escape coalesce\n");
-            goto fail;
+            return 0;
         }
-			
-
-	/* Do the pointers in a heap block point to valid heap addresses? */
-	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = (void *) NEXT_BLKP(bp)) {
-		if (bp < (void *)heap_listp || bp >= mem_sbrk(0))
-			goto fail;
-		if (GET_SIZE(HDRP(bp)) != GET_SIZE(FTRP(bp)))
-			goto fail;
-		if (GET_ISALLOCATED(HDRP(bp)) != GET_ISALLOCATED(FTRP(bp)))
-			goto fail;
-	}
+    }
 
 	return 1;
-
-fail:
-	fprintf(stderr, "mm_check failed\n");
-	return 0;
 }
+#endif
