@@ -132,7 +132,7 @@ static void* coalesce(void *bp)
     int is_next_allocated = GET_ISALLOCATED(HDRP(next_blkp));
     int is_prev_allocated = GET_ISALLOCATED(HDRP(prev_blkp));
 
-    if (!is_next_allocated) {
+    if (!is_next_allocated) { /* if continuihng block is free => coalesce */
         size_after_coalesce += GET_SIZE(HDRP(next_blkp));
         
         remove_node(next_blkp);
@@ -140,7 +140,7 @@ static void* coalesce(void *bp)
         PUT_W(FTRP(bp), PACK(size_after_coalesce, 0));
     }
 
-    if (!is_prev_allocated) {
+    if (!is_prev_allocated) { /* if preceding block is free => coalesce*/
         size_after_coalesce += GET_SIZE(HDRP(prev_blkp));
 
         remove_node(prev_blkp);
@@ -150,7 +150,7 @@ static void* coalesce(void *bp)
         bp = (void *) prev_blkp;
     }
 
-    insert_node(bp, GET_SIZE(HDRP(bp)));
+    insert_node(bp, GET_SIZE(HDRP(bp))); /* insert the coalesced block */
 
     return (void *) bp;
 }
@@ -164,14 +164,14 @@ static void *allocate(void *bp, size_t blk_size)
 
     size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
-    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) {
+    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) { /* when splitting possible */
         PUT_W(HDRP(bp), PACK(blk_size, 1));
         PUT_W(FTRP(bp), PACK(blk_size, 1));
         char *next_blkp = NEXT_BLKP(bp);
         PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
         PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
         insert_node(next_blkp, curr_blk_size - blk_size);
-    } else {
+    } else { /* too small to split */
         PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
         PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
     }
@@ -179,7 +179,7 @@ static void *allocate(void *bp, size_t blk_size)
     return bp;
 }
 
-/* add freed block at bp with size blk_size to appropriate seglist */
+/* add freed block at bp with size blk_size to appropriate position of the free list */
 static void insert_node(void *bp, size_t blk_size) 
 {
     void *prev = NULL;
@@ -222,6 +222,7 @@ static void insert_node(void *bp, size_t blk_size)
             SET_PREV_PTR(next, bp);
             free_list_head = bp;
         } else {
+            /* when the free list was empty */
             free_list_tail = bp;
             free_list_head = bp;
             SET_NEXT_PTR(bp, NULL);
@@ -275,7 +276,7 @@ static void remove_node(void *bp)
 		if (GET_NEXT_PTR(bp)) { /* no prev, exist next => bp is the first block of the free list */
             SET_PREV_PTR(GET_NEXT_PTR(bp), NULL);
             free_list_head = (void *) GET_NEXT_PTR(bp);
-        } else { /* the only block in the free list */
+        } else { /* the only block in the free list removed */
 			free_list_tail = NULL;
             free_list_head = NULL;
         }
@@ -435,7 +436,7 @@ static int mm_check()
 	/* Check if every free blocks are coalesced properly */
 	for (bp = free_list_head; bp; bp = (void *) GET_NEXT_PTR(bp)) {
 		if ((void *)GET_PREV_PTR(bp) == PREV_BLKP(bp)) {
-            printf("escape coalesce\n");
+            printf("coalesce failed\n");
             return 0;
         }
     }
