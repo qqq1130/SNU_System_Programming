@@ -161,24 +161,26 @@ static void *allocate(void *bp, size_t blk_size)
 
     size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
-    if (curr_blk_size - blk_size <= MINIMUM_BLK_SIZE) {  /* too small to split */
+    if (curr_blk_size - blk_size > MINIMUM_BLK_SIZE) {  /* split possible */
+        if (blk_size >= 100) { /* if the block is big enough: put it at the back of the block */
+            PUT_W(HDRP(bp), PACK(curr_blk_size - blk_size, 0));
+            PUT_W(FTRP(bp), PACK(curr_blk_size - blk_size, 0));
+            char *next_blkp = NEXT_BLKP(bp);
+            PUT_W(HDRP(next_blkp), PACK(blk_size, 1));
+            PUT_W(FTRP(next_blkp), PACK(blk_size, 1));
+            insert_node(bp, curr_blk_size - blk_size);
+            return next_blkp;
+        } else {
+            PUT_W(HDRP(bp), PACK(blk_size, 1));
+            PUT_W(FTRP(bp), PACK(blk_size, 1));
+            char *next_blkp = NEXT_BLKP(bp);
+            PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
+            PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
+            insert_node(next_blkp, curr_blk_size - blk_size);
+        }
+    } else { /* too small to split*/
         PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
         PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
-    } else if (blk_size >= 100) {
-        PUT_W(HDRP(bp), PACK(curr_blk_size - blk_size, 0));
-        PUT_W(FTRP(bp), PACK(curr_blk_size - blk_size, 0));
-        char *next_blkp = NEXT_BLKP(bp);
-        PUT_W(HDRP(next_blkp), PACK(blk_size, 1));
-        PUT_W(FTRP(next_blkp), PACK(blk_size, 1));
-        insert_node(bp, curr_blk_size - blk_size);
-        return next_blkp;
-    } else {
-        PUT_W(HDRP(bp), PACK(blk_size, 1));
-        PUT_W(FTRP(bp), PACK(blk_size, 1));
-        char *next_blkp = NEXT_BLKP(bp);
-        PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
-        PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
-        insert_node(next_blkp, curr_blk_size - blk_size);
     }
 
     return bp;
