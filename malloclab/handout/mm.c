@@ -129,7 +129,7 @@ static void* coalesce(void *bp)
     int is_next_allocated = GET_ISALLOCATED(HDRP(next_blkp));
     int is_prev_allocated = GET_ISALLOCATED(HDRP(prev_blkp));
 
-    if (!is_next_allocated) {
+    if (!is_next_allocated) { /* if continuihng block is free => coalesce */
         size_after_coalesce += GET_SIZE(HDRP(next_blkp));
         
         remove_node(next_blkp);
@@ -137,7 +137,7 @@ static void* coalesce(void *bp)
         PUT_W(FTRP(bp), PACK(size_after_coalesce, 0));
     }
 
-    if (!is_prev_allocated) {
+    if (!is_prev_allocated) { /* if preceding block is free => coalesce*/
         size_after_coalesce += GET_SIZE(HDRP(prev_blkp));
 
         remove_node(prev_blkp);
@@ -147,7 +147,7 @@ static void* coalesce(void *bp)
         bp = (void *) prev_blkp;
     }
 
-    insert_node(bp, GET_SIZE(HDRP(bp)));
+    insert_node(bp, GET_SIZE(HDRP(bp))); /* insert the coalesced block */
 
     return (void *) bp;
 }
@@ -161,7 +161,7 @@ static void *allocate(void *bp, size_t blk_size)
 
     size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
-    if (curr_blk_size - blk_size <= MINIMUM_BLK_SIZE) {
+    if (curr_blk_size - blk_size <= MINIMUM_BLK_SIZE) {  /* too small to split */
         PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
         PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
     } else if (blk_size >= 100) {
@@ -245,18 +245,18 @@ removing node from linked list (segregated list)
 */
 static void remove_node(void *bp) 
 {
-    if (GET_PREV_PTR(bp)) {
+    if (GET_PREV_PTR(bp)) { /* there exist prev and next */
 		if (GET_NEXT_PTR(bp)) {
             SET_NEXT_PTR(GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
             SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
-		} else {
+		} else { /* there exist prev, no next => bp is the last block of the free list */
             SET_NEXT_PTR(GET_PREV_PTR(bp), NULL);
 			free_list_tail = (void *) GET_PREV_PTR(bp);
 		}
 	} else {
-		if (GET_NEXT_PTR(bp)) {
+		if (GET_NEXT_PTR(bp)) { /* no prev, exist next => bp is the first block of the free list */
             SET_PREV_PTR(GET_NEXT_PTR(bp), NULL);
-        } else {
+        } else { /* the only block in the free list removed */
 			free_list_tail = NULL;
         }
 	}
