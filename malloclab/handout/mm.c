@@ -7,6 +7,41 @@
 #include "mm.h"
 #include "memlib.h"
 
+/***************************
+ * <ALLOCATED BLOCK>
+ * --------------
+ * 1 word header
+ * --------------
+ * 
+ * 
+ * payload
+ * 
+ * 
+ * 
+ * --------------
+ * 1 word footer
+ * --------------
+***************************/
+
+/***************************
+ * <FREE BLOCK>
+ * --------------
+ * 1 word header
+ * --------------
+ * 1 word prev ptr
+ * --------------
+ * 1 word next ptr
+ * --------------
+ * 
+ * 
+ * free space
+ * 
+ * 
+ * --------------
+ * 1 word footer
+ * --------------
+***************************/
+
 // ***********************************************************
 // helper function prototypes
 // ***********************************************************
@@ -165,7 +200,12 @@ static void *allocate(void *bp, size_t blk_size)
     size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
     if (curr_blk_size - blk_size > MINIMUM_BLK_SIZE) {  /* split possible */
-        if (blk_size >= 100) { /* if the block is big enough: put it at the back of the block */
+        /* if the block is big enough: put it at the back of the block 
+         * so that when new heap space is allocated,
+         * we can keep small allocated blocks in the front of the heap space
+         * and big allocated blocks in the back of the heap space.
+        */
+        if (blk_size >= 100) { 
             PUT_W(HDRP(bp), PACK(curr_blk_size - blk_size, 0));
             PUT_W(FTRP(bp), PACK(curr_blk_size - blk_size, 0));
             char *next_blkp = NEXT_BLKP(bp);
