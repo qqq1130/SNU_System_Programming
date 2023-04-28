@@ -72,15 +72,14 @@ static void remove_node(void *bp);
 #define SET_PREV_PTR(bp, addr) (GET_PREV_PTR(bp) = (unsigned int) (addr))
 #define SET_NEXT_PTR(bp, addr) (GET_NEXT_PTR(bp) = (unsigned int) (addr))
 
-/* standard of blk size. when to start from head, when to start from tail? */
-#define STANDARD 2048
-
-// #define DEBUG 1
+// #define DEBUG
 
 #ifdef DEBUG
-static int mm_check();
 /* heap consistency checker */
 #define MM_CHECK mm_check()
+static int mm_check();
+#else
+#define MM_CHECK
 #endif
 
 // ***********************************************************
@@ -90,9 +89,7 @@ static int mm_check();
 /* pointer which points to middle of the prologue block */
 static char *heap_listp;
 /* segregated list to manage free blocks */
-static void *free_list_head;
 static void *free_list_tail;
-
 
 // ***********************************************************
 // helper functions start
@@ -132,7 +129,7 @@ static void* coalesce(void *bp)
     int is_next_allocated = GET_ISALLOCATED(HDRP(next_blkp));
     int is_prev_allocated = GET_ISALLOCATED(HDRP(prev_blkp));
 
-    if (!is_next_allocated) { /* if continuihng block is free => coalesce */
+    if (!is_next_allocated) {
         size_after_coalesce += GET_SIZE(HDRP(next_blkp));
         
         remove_node(next_blkp);
@@ -140,7 +137,7 @@ static void* coalesce(void *bp)
         PUT_W(FTRP(bp), PACK(size_after_coalesce, 0));
     }
 
-    if (!is_prev_allocated) { /* if preceding block is free => coalesce*/
+    if (!is_prev_allocated) {
         size_after_coalesce += GET_SIZE(HDRP(prev_blkp));
 
         remove_node(prev_blkp);
@@ -150,7 +147,7 @@ static void* coalesce(void *bp)
         bp = (void *) prev_blkp;
     }
 
-    insert_node(bp, GET_SIZE(HDRP(bp))); /* insert the coalesced block */
+    insert_node(bp, GET_SIZE(HDRP(bp)));
 
     return (void *) bp;
 }
@@ -164,14 +161,14 @@ static void *allocate(void *bp, size_t blk_size)
 
     size_t curr_blk_size = GET_SIZE(HDRP(bp));
 
-    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) { /* when splitting possible */
+    if (curr_blk_size - blk_size >= MINIMUM_BLK_SIZE) {
         PUT_W(HDRP(bp), PACK(blk_size, 1));
         PUT_W(FTRP(bp), PACK(blk_size, 1));
         char *next_blkp = NEXT_BLKP(bp);
         PUT_W(HDRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
         PUT_W(FTRP(next_blkp), PACK(curr_blk_size - blk_size, 0));
         insert_node(next_blkp, curr_blk_size - blk_size);
-    } else { /* too small to split */
+    } else {
         PUT_W(HDRP(bp), PACK(curr_blk_size, 1));
         PUT_W(FTRP(bp), PACK(curr_blk_size, 1));
     }
@@ -179,28 +176,18 @@ static void *allocate(void *bp, size_t blk_size)
     return bp;
 }
 
-/* add freed block at bp with size blk_size to appropriate position of the free list */
+/* add freed block at bp with size blk_size to appropriate seglist */
 static void insert_node(void *bp, size_t blk_size) 
 {
-    void *prev = NULL;
-    void *next = NULL;
+    void *prev = free_list_tail;
+	void *next = NULL;
 
-    if (blk_size >= STANDARD) { /* big block: search from the tail of the list */
-        prev = free_list_tail;
-
-        while (prev && (blk_size < GET_SIZE(HDRP(prev)))) {
-            next = prev;
-            prev = (void *)GET_PREV_PTR(prev);
-        }
-    } else { /* small block: search from the head of the list */
-        next = free_list_head;
-
-        while (next && (blk_size > GET_SIZE(HDRP(next)))) {
-            prev = next;
-            next = (void *)GET_NEXT_PTR(next);
-        }
+    /* small size blocks come at the tail of the free list */
+    while (prev && (blk_size > GET_SIZE(HDRP(prev)))) {
+        next = prev;
+        prev = (void *)GET_PREV_PTR(prev);
     }
-        
+    
     if (prev) {
         if (next) {
             SET_NEXT_PTR(bp, next);
@@ -208,7 +195,7 @@ static void insert_node(void *bp, size_t blk_size)
             SET_NEXT_PTR(prev, bp);
             SET_PREV_PTR(next, bp);
         } else {
-            /* bp is biggest. add to the tail of the free list */
+            /* bp is smallest. add to the tail of the free list */
             SET_NEXT_PTR(bp, NULL);
             SET_PREV_PTR(bp, prev);
             SET_NEXT_PTR(prev, bp);
@@ -216,41 +203,27 @@ static void insert_node(void *bp, size_t blk_size)
         }
     } else {
         if (next) {
-            /* bp is smallest. add at the head of the free list */
+            /* bp is biggest. add at the head of the free list */
             SET_PREV_PTR(bp, NULL);
             SET_NEXT_PTR(bp, next);
             SET_PREV_PTR(next, bp);
-            free_list_head = bp;
         } else {
-            /* when the free list was empty */
             free_list_tail = bp;
-            free_list_head = bp;
             SET_NEXT_PTR(bp, NULL);
             SET_PREV_PTR(bp, NULL);
         }
     }
+
 }
 
 /* select free block of size blk_size to allocate */
 static void *find_fitting_blk(size_t blk_size) 
 {
-    char* bp;
+    char* bp = free_list_tail;
 
-    if (blk_size >= STANDARD) {
-        /* search from back of the free list */
-        bp = free_list_tail;
-        while(bp && (blk_size > GET_SIZE(HDRP(bp)))) {
-            bp = (char *)GET_PREV_PTR(bp);
-        }   
-    } else {
-        /* search from head of the free list */
-        bp = free_list_head;
-        while (bp && (blk_size > GET_SIZE(HDRP(bp)))) {
-            bp = (char *)GET_NEXT_PTR(bp);
-        }
+    while(bp && (blk_size > GET_SIZE(HDRP(bp)))) {
+        bp = (char *)GET_PREV_PTR(bp);
     }
-
-    
     if (!bp) { //no matching block found 
         int extend_size = MAX(blk_size, CHUNKSIZE);
         return extend_heap(extend_size/WSIZE);
@@ -265,20 +238,18 @@ removing node from linked list (segregated list)
 static void remove_node(void *bp) 
 {
     if (GET_PREV_PTR(bp)) {
-		if (GET_NEXT_PTR(bp)) { /* there exist prev and next */
+		if (GET_NEXT_PTR(bp)) {
             SET_NEXT_PTR(GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
             SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
-		} else { /* there exist prev, no next => bp is the last block of the free list */
+		} else {
             SET_NEXT_PTR(GET_PREV_PTR(bp), NULL);
 			free_list_tail = (void *) GET_PREV_PTR(bp);
 		}
-	} else { 
-		if (GET_NEXT_PTR(bp)) { /* no prev, exist next => bp is the first block of the free list */
+	} else {
+		if (GET_NEXT_PTR(bp)) {
             SET_PREV_PTR(GET_NEXT_PTR(bp), NULL);
-            free_list_head = (void *) GET_NEXT_PTR(bp);
-        } else { /* the only block in the free list removed */
+        } else {
 			free_list_tail = NULL;
-            free_list_head = NULL;
         }
 	}
 }
@@ -303,7 +274,6 @@ int mm_init(void)
     heap_listp += DSIZE;
 
     /* initialize free_list */
-    free_list_head = NULL;
     free_list_tail = NULL;
 
     void *bp; 
@@ -333,16 +303,7 @@ void *mm_malloc(size_t size)
         return NULL;
     }
 
-    
-    bp = allocate(bp, adjusted_size);
-
-#ifdef DEBUG
-    if (!MM_CHECK) {
-        printf("mm_check failed\n");
-    }
-#endif
-
-    return bp;
+    return allocate(bp, adjusted_size);
 }
 
 /*
@@ -358,12 +319,6 @@ void mm_free(void *ptr)
     PUT_W(hdrp, PACK(curr_block_size, 0));
     PUT_W(ftrp, PACK(curr_block_size, 0));
     coalesce(ptr);
-
-#ifdef DEBUG
-    if (!MM_CHECK) {
-        printf("mm_check failed\n");
-    }
-#endif
 }
 
 /*
@@ -373,7 +328,7 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *newptr = ptr;
 	size_t new_blk_size;
-	size_t extend_size;
+	size_t extend_size = 0;
 	int remaining_size;
 
 	if (size == 0) {
@@ -396,11 +351,12 @@ void *mm_realloc(void *ptr, size_t size)
                 PUT_W(HDRP(ptr), PACK(new_blk_size + remaining_size, 1));
                 PUT_W(FTRP(ptr), PACK(new_blk_size + remaining_size, 1));
             }
-		} else if (GET_SIZE(HDRP(ptr)) == 0 && (remaining_size < 0)) {
-            /* extend heap */
-            extend_size = MAX(-remaining_size, CHUNKSIZE);
-            if (extend_heap(extend_size/WSIZE) == NULL) {
-                return NULL;
+		} else if (GET_SIZE(HDRP(ptr)) == 0) {
+            if (remaining_size < 0) { /* extend heap */
+				extend_size = MAX(-remaining_size, CHUNKSIZE);
+				if (extend_heap(extend_size/WSIZE) == NULL) {
+                    return NULL;
+                }
             }
 
             remaining_size += extend_size; /* now, new_blk_size + remaining_size == (initial size of the block) + (extended size) */
@@ -418,9 +374,8 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 #ifdef DEBUG
-static int mm_check()
-{
-	void *bp;
+static int mm_check() {
+    void *bp;
 
 	for (bp = free_list_head; bp; bp = (void *) GET_NEXT_PTR(bp)) {
         if (GET_ISALLOCATED(HDRP(bp))) { /* check if every block in the free list is free */
