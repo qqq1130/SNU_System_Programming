@@ -153,7 +153,7 @@ static void* coalesce(void *bp)
 }
 
 /* mark given block (bp) as allocated. split if possible. 
- * add the splitted blk to the seglist, remove allocated blk from the seglist.
+ * add the splitted blk to the freelist, remove allocated blk from the freelist.
  */
 static void *allocate(void *bp, size_t blk_size)
 {
@@ -186,7 +186,7 @@ static void *allocate(void *bp, size_t blk_size)
     return bp;
 }
 
-/* add freed block at bp with size blk_size to appropriate seglist */
+/* add freed block at bp with size blk_size to the free list */
 static void insert_node(void *bp, size_t blk_size) 
 {
     void *prev = free_list_tail;
