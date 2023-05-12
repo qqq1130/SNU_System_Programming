@@ -4,6 +4,9 @@
 #include <linux/uaccess.h>
 #include <linux/list.h>
 #include <linux/stat.h>
+#include <linux/slab.h>
+
+#define BUFSIZE 2048
 
 MODULE_LICENSE("GPL");
 
@@ -22,6 +25,10 @@ static ssize_t write_pid_to_input(struct file *fp,
 	loff_t *position)
 {
     pid_t input_pid;
+	char *buf = kmalloc(BUFSIZE, GFP_KERNEL);
+	int cursor = 0;
+	int ret;
+
     sscanf(user_buffer, "%u", &input_pid);
 
 	if (!(curr = pid_task(find_get_pid(input_pid), PIDTYPE_PID))) 
@@ -32,18 +39,24 @@ static ssize_t write_pid_to_input(struct file *fp,
     while(curr->pid) {
 		struct process_item *item = kmalloc(sizeof(struct process_item), GFP_KERNEL);
 		item->pid = curr->pid;
-		item->process_name = curr->comm;
+		strcpy(item->process_name, curr->comm);
 		list_add(&item->list, &task_list);
 		curr = curr->real_parent;
 	}
 
 	struct process_item *pos;
 	struct process_item *temp;
-    list_for_each_entry_reverse_safe(pos, temp, &task_list, list) {
-		
+
+	list_for_each_entry_safe(pos, temp, &task_list, list) {
+		cursor += sprintf(buf + cursor, "%s (%d)\n", pos->process_name, pos->pid);
+		list_del(&pos->list);
+		kfree(pos);
 	}
 
-    return length;
+	ret = simple_read_from_buffer(user_buffer, length, position, buf, strlen(buf));
+
+	kfree(buf);
+    return ret;
 }
 
 static const struct file_operations dbfs_fops = {
