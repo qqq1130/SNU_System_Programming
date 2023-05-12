@@ -10,9 +10,6 @@ MODULE_LICENSE("GPL");
 static struct dentry *dir, *inputdir, *ptreedir;
 static struct task_struct *curr;
 
-char* output;
-ssize_t output_size;
-
 struct process_item {
     pid_t pid;
     char process_name[16];
@@ -27,21 +24,24 @@ static ssize_t write_pid_to_input(struct file *fp,
     pid_t input_pid;
     sscanf(user_buffer, "%u", &input_pid);
 
-	if(!(curr = pid_task(find_get_pid(input_pid), PIDTYPE_PID))) 
+	if (!(curr = pid_task(find_get_pid(input_pid), PIDTYPE_PID))) 
 		return -ESRCH;
 
-	printk("%u\n", input_pid);
 	LIST_HEAD(task_list);
 
-    // do {
-	// 	temp = kmalloc(sizeof(struct process_item), GFP_KERNEL);
-	// 	temp->pid = curr->pid;
-	// 	temp->process_name = curr->comm;
-	// 	list_add(&temp->list, &task_list);
-	// 	curr = curr->real_parent;
-	// } while(curr != &init_task);
+    while(curr->pid) {
+		struct process_item *item = kmalloc(sizeof(struct process_item), GFP_KERNEL);
+		item->pid = curr->pid;
+		item->process_name = curr->comm;
+		list_add(&item->list, &task_list);
+		curr = curr->real_parent;
+	}
 
-    // Make Output Format string: process_command (process_id)
+	struct process_item *pos;
+	struct process_item *temp;
+    list_for_each_entry_reverse_safe(pos, temp, &task_list, list) {
+		
+	}
 
     return length;
 }
@@ -57,7 +57,7 @@ static int __init dbfs_module_init(void)
 		return -1;
 	}
 
-	if (!(inputdir = debugfs_create_file("input", S_IRWXU, dir, NULL, &dbfs_fops))) {
+	if (!(inputdir = debugfs_create_file("input", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
 		printk("FAILED: creating input file\n");
 		if (dir) {
 			debugfs_remove_recursive(dir);
@@ -65,7 +65,7 @@ static int __init dbfs_module_init(void)
 		return -1;
 	}
 
-	if (!(ptreedir = debugfs_create_file("ptree", S_IRWXU, dir, NULL, &dbfs_fops))) {
+	if (!(ptreedir = debugfs_create_file("ptree", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
 		printk("FAILED: creating ptree file\n");
 		if (dir) {
 			debugfs_remove_recursive(dir);

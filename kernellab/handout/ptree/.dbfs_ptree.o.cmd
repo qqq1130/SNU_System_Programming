@@ -895,6 +895,21 @@ deps_/home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.o := \
     $(wildcard include/config/MODULES_USE_ELF_REL) \
     $(wildcard include/config/MODULES_USE_ELF_RELA) \
   arch/x86/include/asm/orc_types.h \
+  include/linux/slab.h \
+    $(wildcard include/config/DEBUG_SLAB) \
+    $(wildcard include/config/FAILSLAB) \
+    $(wildcard include/config/HAVE_HARDENED_USERCOPY_ALLOCATOR) \
+    $(wildcard include/config/SLAB) \
+    $(wildcard include/config/SLUB) \
+    $(wildcard include/config/SLOB) \
+    $(wildcard include/config/CC_IS_GCC) \
+    $(wildcard include/config/CLANG_VERSION) \
+  include/linux/overflow.h \
+  include/linux/percpu-refcount.h \
+  include/linux/kasan.h \
+    $(wildcard include/config/KASAN_STACK) \
+    $(wildcard include/config/KASAN_VMALLOC) \
+    $(wildcard include/config/KASAN_INLINE) \
 
 /home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.o: $(deps_/home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.o)
 
