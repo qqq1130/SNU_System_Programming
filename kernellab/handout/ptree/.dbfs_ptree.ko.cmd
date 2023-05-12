@@ -1,1 +1,0 @@
-cmd_/home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.ko := ld -r  -m elf_x86_64 -z noexecstack   --build-id=sha1  -T scripts/module.lds -o /home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.ko /home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.o /home/csh/system_programming/kernellab/handout/ptree/dbfs_ptree.mod.o;  true
