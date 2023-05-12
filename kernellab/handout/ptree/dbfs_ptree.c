@@ -12,6 +12,7 @@ MODULE_LICENSE("GPL");
 
 static struct dentry *dir, *inputdir, *ptreedir;
 static struct task_struct *curr;
+static char *buf;
 
 struct process_item {
     pid_t pid;
@@ -25,7 +26,6 @@ static ssize_t write_pid_to_input(struct file *fp,
                                 loff_t *position)
 {
     pid_t input_pid;
-	char *buf = kmalloc(BUFSIZE, GFP_KERNEL);
 	int cursor = 0;
 	int ret;
 
@@ -52,14 +52,21 @@ static ssize_t write_pid_to_input(struct file *fp,
 		list_del(&pos->list);
 		kfree(pos);
 	}
-	ret = simple_read_from_buffer(user_buffer, length, position, buf, strlen(buf));
 
-	kfree(buf);
-    return ret;
+    return cursor;
+}
+
+static ssize_t read_ptree(struct file *fp, 
+                                char __user *user_buffer, 
+                                size_t length, 
+                                loff_t *position)
+{   
+    return simple_read_from_buffer(user_buffer, length, position, buf, strlen(buf));
 }
 
 static const struct file_operations dbfs_fops = {
     .write = write_pid_to_input,
+    .read = read_ptree
 };
 
 
@@ -81,12 +88,14 @@ static int __init dbfs_module_init(void)
     }
 
 	printk("dbfs_ptree module initialize done\n");
+    buf = kmalloc(BUFSIZE, GFP_KERNEL);
     return 0;
 }
 
 static void __exit dbfs_module_exit(void)
 {
     debugfs_remove_recursive(dir);
+    kfree(buf);
 	printk("dbfs_ptree module exit\n");
 }
 
