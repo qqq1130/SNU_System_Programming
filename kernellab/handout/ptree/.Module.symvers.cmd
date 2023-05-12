@@ -1,0 +1,1 @@
+cmd_/home/csh/system_programming/kernellab/handout/ptree/Module.symvers := sed 's/\.ko$$/\.o/' /home/csh/system_programming/kernellab/handout/ptree/modules.order | scripts/mod/modpost -m -a  -o /home/csh/system_programming/kernellab/handout/ptree/Module.symvers -e -i Module.symvers   -T -
