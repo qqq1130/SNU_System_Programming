@@ -66,19 +66,18 @@ static const struct file_operations dbfs_fops = {
 
 static int __init dbfs_module_init(void)
 {
-    /* Create ptree directory at /sys/kernel/debug */
     if (!(dir = debugfs_create_dir("ptree", NULL))) {
-        printk("Cannot create ptree dir\n");
+        printk("Failed to create ptree dir\n");
         return -1;
     }
-    /* Create input file at /sys/kernel/debug/ptree */
-    if (!(inputdir = debugfs_create_file("input", 700, dir, NULL, &dbfs_fops))) {
-        printk("Cannot create input file\n");
+
+    if (!(inputdir = debugfs_create_file("input", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
+        printk("Failed to create input file\n");
         return -1;
     }
-    /* Create ptree file at /sys/kernel/debug/ptree */
-    if (!(ptreedir = debugfs_create_file("ptree", 700, dir, NULL, &dbfs_fops))) {
-        printk("Cannot create ptree file\n");
+
+    if (!(ptreedir = debugfs_create_file("ptree", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
+        printk("Failed to create ptree file\n");
         return -1;
     }
 
