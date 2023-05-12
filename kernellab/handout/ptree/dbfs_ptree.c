@@ -52,9 +52,6 @@ static ssize_t write_pid_to_input(struct file *fp,
 		list_del(&pos->list);
 		kfree(pos);
 	}
-	// debugging
-	printk(buf);
-	// debugging
 	ret = simple_read_from_buffer(user_buffer, length, position, buf, strlen(buf));
 
 	kfree(buf);
