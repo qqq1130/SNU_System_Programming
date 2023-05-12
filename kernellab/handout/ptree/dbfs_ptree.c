@@ -13,16 +13,20 @@ MODULE_LICENSE("GPL");
 static struct dentry *dir, *inputdir, *ptreedir;
 static struct task_struct *curr;
 
-struct process_item {
-    pid_t pid;
-    char process_name[16];
+char* output;
+ssize_t output_size;
+
+typedef struct node{
+    char* info;
     struct list_head list;
-};
+} node;
+
+struct list_head task_list;
 
 static ssize_t write_pid_to_input(struct file *fp, 
-    const char __user *user_buffer, 
-	size_t length, 
-	loff_t *position)
+                                const char __user *user_buffer, 
+                                size_t length, 
+                                loff_t *position)
 {
     pid_t input_pid;
 	char *buf = kmalloc(BUFSIZE, GFP_KERNEL);
@@ -61,40 +65,35 @@ static ssize_t write_pid_to_input(struct file *fp,
 
 static const struct file_operations dbfs_fops = {
     .write = write_pid_to_input,
+    .read = read_from_ptree,
 };
+
 
 static int __init dbfs_module_init(void)
 {
+    /* Create ptree directory at /sys/kernel/debug */
     if (!(dir = debugfs_create_dir("ptree", NULL))) {
-		printk("FAILED: creating ptree dir\n");
-		return -1;
-	}
+        printk("Cannot create ptree dir\n");
+        return -1;
+    }
+    /* Create input file at /sys/kernel/debug/ptree */
+    if (!(inputdir = debugfs_create_file("input", 700, dir, NULL, &dbfs_fops))) {
+        printk("Cannot create input file\n");
+        return -1;
+    }
+    /* Create ptree file at /sys/kernel/debug/ptree */
+    if (!(ptreedir = debugfs_create_file("ptree", 700, dir, NULL, &dbfs_fops))) {
+        printk("Cannot create ptree file\n");
+        return -1;
+    }
 
-	if (!(inputdir = debugfs_create_file("input", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
-		printk("FAILED: creating input file\n");
-		if (dir) {
-			debugfs_remove_recursive(dir);
-		}
-		return -1;
-	}
-
-	if (!(ptreedir = debugfs_create_file("ptree", S_IRWXU|S_IRWXG|S_IRWXO, dir, NULL, &dbfs_fops))) {
-		printk("FAILED: creating ptree file\n");
-		if (dir) {
-			debugfs_remove_recursive(dir);
-		}
-		return -1;
-	}
-	
 	printk("dbfs_ptree module initialize done\n");
-
     return 0;
 }
 
 static void __exit dbfs_module_exit(void)
 {
     debugfs_remove_recursive(dir);
-	
 	printk("dbfs_ptree module exit\n");
 }
 
