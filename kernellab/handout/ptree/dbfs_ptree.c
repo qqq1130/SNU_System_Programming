@@ -29,19 +29,19 @@ static ssize_t write_pid_to_input(struct file *fp,
 
 	LIST_HEAD(task_list);
 
-    while(curr->pid) {
-		struct process_item *item = kmalloc(sizeof(struct process_item), GFP_KERNEL);
-		item->pid = curr->pid;
-		item->process_name = curr->comm;
-		list_add(&item->list, &task_list);
-		curr = curr->real_parent;
-	}
+    // while(curr->pid) {
+	// 	struct process_item *item = kmalloc(sizeof(struct process_item), GFP_KERNEL);
+	// 	item->pid = curr->pid;
+	// 	item->process_name = curr->comm;
+	// 	list_add(&item->list, &task_list);
+	// 	curr = curr->real_parent;
+	// }
 
-	struct process_item *pos;
-	struct process_item *temp;
-    list_for_each_entry_reverse_safe(pos, temp, &task_list, list) {
+	// struct process_item *pos;
+	// struct process_item *temp;
+    // list_for_each_entry_reverse_safe(pos, temp, &task_list, list) {
 		
-	}
+	// }
 
     return length;
 }
