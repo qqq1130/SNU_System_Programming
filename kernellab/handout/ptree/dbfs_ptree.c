@@ -13,15 +13,11 @@ MODULE_LICENSE("GPL");
 static struct dentry *dir, *inputdir, *ptreedir;
 static struct task_struct *curr;
 
-char* output;
-ssize_t output_size;
-
-typedef struct node{
-    char* info;
+struct process_item {
+    pid_t pid;
+    char process_name[16];
     struct list_head list;
-} node;
-
-struct list_head task_list;
+};
 
 static ssize_t write_pid_to_input(struct file *fp, 
                                 const char __user *user_buffer, 
@@ -65,7 +61,6 @@ static ssize_t write_pid_to_input(struct file *fp,
 
 static const struct file_operations dbfs_fops = {
     .write = write_pid_to_input,
-    .read = read_from_ptree,
 };
 
 
