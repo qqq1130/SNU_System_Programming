@@ -57,7 +57,7 @@ static ssize_t read_output(struct file *fp,
 
     pckt.paddr = pte_val(pte) & PTE_ADDR_MASK;
 
-    return simple_read_from_buffer(user_buf, count, pos, &pckt, sizeof(pckt));
+    return simple_read_from_buffer(user_buffer, length, position, &pckt, sizeof(pckt));
 }
 
 static const struct file_operations dbfs_fops = {
