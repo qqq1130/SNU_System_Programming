@@ -56,7 +56,7 @@ static ssize_t read_output(struct file *fp,
     pte = pte_offset_kernel(pmd, vaddr);
     if(pte_none(*pte) || !pte_present(*pte)) return -EINVAL;
 
-    pckt.paddr = pte_val(pte) & PTE_ADDR_MASK;
+    pckt.paddr = pte_val(*pte) & PTE_PFN_MASK;
 
     return simple_read_from_buffer(user_buffer, length, position, &pckt, sizeof(pckt));
 }
