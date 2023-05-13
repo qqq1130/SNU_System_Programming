@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/uaccess.h>
+#include <linux/pgtable.h>
 #include <asm/pgtable.h>
 
 MODULE_LICENSE("GPL");
