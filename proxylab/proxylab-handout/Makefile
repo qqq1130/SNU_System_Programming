@@ -7,18 +7,21 @@
 CC = gcc
 CFLAGS = -g -Wall
 LDFLAGS = -lpthread
-STUNO = 2021-12345
+STUNO = 2018-17329
 
 all: proxy
 
 csapp.o: csapp.c csapp.h
 	$(CC) $(CFLAGS) -c csapp.c
 
+cache.o: cache.c cache.h csapp.h
+	$(CC) $(CFLAGS) -c cache.c
+
 proxy.o: proxy.c csapp.h
 	$(CC) $(CFLAGS) -c proxy.c
 
 proxy: proxy.o csapp.o
-	$(CC) $(CFLAGS) proxy.o csapp.o -o proxy $(LDFLAGS)
+	$(CC) $(CFLAGS) proxy.o csapp.o cache.o -o proxy $(LDFLAGS)
 
 # Creates a tarball in ../proxylab-handin.tar that you can then
 # hand in. DO NOT MODIFY THIS!
