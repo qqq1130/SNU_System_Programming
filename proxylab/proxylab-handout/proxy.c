@@ -15,7 +15,6 @@ void parse_uri(char *uri, char **host, char **port, char **path);
 void forward_header(rio_t *rio, int connfd, char *uri);
 void forward_response(rio_t *rio, int connfd, char *uri, char *path);
 
-
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 static cache_t cache;
@@ -157,9 +156,11 @@ void forward_response(rio_t *rio, int connfd, char *uri, char *path){
     size_t size = 0;
     size_t read = 0;
 
-	while ((size = Rio_readnb(rio, buf, MAXLINE))) {
+	while ((size = Rio_readlineb(rio, buf, MAX_OBJECT_SIZE))) {
 		Rio_writen(connfd, buf, size);
-        strcat(payload, buf);
+        if (read + size <= MAX_OBJECT_SIZE) {
+            memcpy(payload + read, buf, size);
+        }
         read += size;
 	}
 
