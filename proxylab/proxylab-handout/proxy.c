@@ -13,7 +13,7 @@ void *serve(void *connfdp);
 void proxy(int connfd);
 void parse_uri(char *uri, char **host, char **port, char **path);
 void forward_header(rio_t *rio, int connfd, char *uri);
-void forward_response(rio_t *rio, int connfd, char *uri);
+void forward_response(rio_t *rio, int connfd, char *uri, char *path);
 
 
 /* You won't lose style points for including this long line in your code */
@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
     while(1) {
         client_len = sizeof(client_addr);
         client_fdp = Malloc(sizeof(int));
-        *client_fdp = Accept(listenfd, &client_addr, &client_len); //second, third parameter can be NULL?
+        *client_fdp = Accept(listenfd, &client_addr, &client_len);
         Pthread_create(&tid, NULL, serve, (void *)client_fdp);
     }
     return 0;
@@ -75,18 +75,18 @@ void proxy(int client_fd) {
     }
     sscanf(buf, "%s %s %s", http_method, uri, http_version);
 
+    parse_uri(uri, &host, &port, &path);
+
     /* check if given uri exist inside the cache */
     pthread_rwlock_rdlock(&rwlock);
     node_t *temp_node;
-    if ((temp_node = search_cache(&cache, uri))) {
+    if ((temp_node = search_cache(&cache, uri, path))) {
         /* if cache hit */
         Rio_writen(client_fd, temp_node->obj, temp_node->obj_size);
         pthread_rwlock_unlock(&rwlock);
         return;
     }
     pthread_rwlock_unlock(&rwlock);
-
-    parse_uri(uri, &host, &port, &path);
 
     server_fd = Open_clientfd(host, port);
     Rio_readinitb(&server_rio, server_fd);
@@ -98,7 +98,7 @@ void proxy(int client_fd) {
     forward_header(&client_rio, server_fd, host);
 
     /* receive response */
-    forward_response(&server_rio, client_fd, uri);
+    forward_response(&server_rio, client_fd, uri, path);
 }
 
 void parse_uri(char *uri, char **host, char **port, char **path) {
@@ -143,7 +143,6 @@ void forward_header(rio_t *rio, int connfd, char *host) {
 
     if (!host_header_exists) {
         sprintf(buf, "Host: %s\r\n", host);
-        size_t buflen = strlen(buf);
         strcat(header, buf);
         read += size;
     }
@@ -151,7 +150,7 @@ void forward_header(rio_t *rio, int connfd, char *host) {
     Rio_writen(connfd, header, read);
 }
 
-void forward_response(rio_t *rio, int connfd, char *uri){
+void forward_response(rio_t *rio, int connfd, char *uri, char *path){
 	char buf[MAX_OBJECT_SIZE];
     char payload[MAX_OBJECT_SIZE];
 
@@ -160,13 +159,12 @@ void forward_response(rio_t *rio, int connfd, char *uri){
 
 	while ((size = Rio_readnb(rio, buf, MAXLINE))) {
 		Rio_writen(connfd, buf, size);
-        // memcpy(payload + read, buf, size);
         strcat(payload, buf);
         read += size;
 	}
 
     pthread_rwlock_wrlock(&rwlock);
-    node_init(&cache, uri, payload, read);
+    node_init(&cache, uri, path, payload, read);
     pthread_rwlock_unlock(&rwlock);
 	return;
 }

@@ -4,7 +4,8 @@
 #define MAXURI 1024
 
 typedef struct node {
-    char uri[MAXURI];
+    char *uri;
+    char *path;
     char *obj;
     size_t obj_size;
     struct node *next;
@@ -19,10 +20,10 @@ typedef struct cache {
 } cache_t;
 
 void cache_init(cache_t *cache);
-node_t *search_cache(cache_t *cache, char *uri);
+node_t *search_cache(cache_t *cache, char *uri, char* path);
 void enqueue(cache_t *cache, node_t *target);
 node_t *dequeue(cache_t *cache);
 void remove_node(cache_t *cache, node_t *target);
 void requeue(cache_t *cache, node_t *target);
-void node_init(cache_t *cache, char* uri, char *buf, size_t buf_size);
+void node_init(cache_t *cache, char* uri, char* path, char *buf, size_t buf_size);
 void node_del(node_t *target);
