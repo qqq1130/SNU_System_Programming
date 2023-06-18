@@ -12,6 +12,9 @@
 void *serve(void *connfdp);
 void proxy(int connfd);
 void parse_uri(char *uri, char **host, char **port, char **path);
+void forward_header(rio_t *rio, int connfd, char *uri);
+void forward_response(rio_t *rio, int connfd, char *uri);
+
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
@@ -59,17 +62,12 @@ void proxy(int client_fd) {
     rio_t server_rio;
     char buf[MAXBUF];
     char uri[MAXURI];
-    char header[MAX_OBJECT_SIZE];
-    char cache_buf[MAX_OBJECT_SIZE];
     char http_method[16];
     char http_version[16];
     char *host;
     char *port;
     char *path;
     int server_fd;
-    int host_header_exists = 0;
-    ssize_t n;
-    ssize_t response_size = 0;
 
     Rio_readinitb(&client_rio, client_fd);
     if (!Rio_readlineb(&client_rio, buf, MAXBUF)) {
@@ -80,7 +78,7 @@ void proxy(int client_fd) {
     /* check if given uri exist inside the cache */
     pthread_rwlock_rdlock(&rwlock);
     node_t *temp_node;
-    if (!(temp_node = search_cache(&cache, uri))) {
+    if ((temp_node = search_cache(&cache, uri))) {
         /* if cache hit */
         Rio_writen(client_fd, temp_node->obj, temp_node->obj_size);
         pthread_rwlock_unlock(&rwlock);
@@ -97,46 +95,10 @@ void proxy(int client_fd) {
     Rio_writen(server_fd, buf, strlen(buf));
 
     /* send headers */
-    while ((n = Rio_readlineb(&client_rio, buf, MAXBUF))) {
-		if (!strncmp(buf, "\r\n", 2)) {
-            break;
-        }
-        if (strstr(buf, "Connection:") == buf) {
-            sprintf(buf, "Connection: close\r\n");
-        } else if (strstr(buf, "Proxy-Connection:") == buf) {
-            sprintf(buf, "Proxy-Connection: close\r\n");
-        } else if (strstr(buf, "Host:") == buf) {
-            host_header_exists = 1;
-        }
-        strcat(header, buf);
-	}
-    if (!host_header_exists) {
-        sprintf(buf, "Host: %s\r\n", host);
-        strcat(header, buf);
-    }
-    strcat(header, "\r\n");
-    Rio_writen(server_fd, header, strlen(header));
+    forward_header(&client_rio, server_fd, host);
 
     /* receive response */
-    while ((n = Rio_readlineb(&server_rio, buf, MAXBUF))) {
-		Rio_writen(client_fd, buf, n);
-
-        if (response_size + n + 1 <= MAX_OBJECT_SIZE) {
-            strcpy(cache_buf + response_size, buf);
-        }
-        response_size += n;
-
-		if (!strncmp(buf, "\r\n", 2)) {
-            break;
-        }
-	}
-    /* add to cache */
-    pthread_rwlock_wrlock(&rwlock);
-    if (response_size <= MAX_OBJECT_SIZE) {
-        node_init(&cache, uri, cache_buf, response_size);
-    }
-    pthread_rwlock_unlock(&rwlock);
-    Close(server_fd);
+    forward_response(&server_rio, client_fd, uri);
 }
 
 void parse_uri(char *uri, char **host, char **port, char **path) {
@@ -154,4 +116,57 @@ void parse_uri(char *uri, char **host, char **port, char **path) {
     }
 
     return;
+}
+
+void forward_header(rio_t *rio, int connfd, char *host) {
+    char buf[MAX_OBJECT_SIZE];
+    char header[MAX_OBJECT_SIZE];
+    int host_header_exists = 0;
+
+    size_t size = 0;
+    size_t read = 0;
+
+    while ((size = Rio_readlineb(rio, buf, MAXBUF))) {
+		if (!strncmp(buf, "\r\n", 2)) {
+            break;
+        }
+        if (strstr(buf, "Connection:") == buf) {
+            sprintf(buf, "Connection: close\r\n");
+        } else if (strstr(buf, "Proxy-Connection:") == buf) {
+            sprintf(buf, "Proxy-Connection: close\r\n");
+        } else if (strstr(buf, "Host:") == buf) {
+            host_header_exists = 1;
+        }
+        strcat(header, buf);
+        read += size;
+	}
+
+    if (!host_header_exists) {
+        sprintf(buf, "Host: %s\r\n", host);
+        size_t buflen = strlen(buf);
+        strcat(header, buf);
+        read += size;
+    }
+    strcat(header, "\r\n");
+    Rio_writen(connfd, header, read);
+}
+
+void forward_response(rio_t *rio, int connfd, char *uri){
+	char buf[MAX_OBJECT_SIZE];
+    char payload[MAX_OBJECT_SIZE];
+
+    size_t size = 0;
+    size_t read = 0;
+
+	while ((size = Rio_readnb(rio, buf, MAXLINE))) {
+		Rio_writen(connfd, buf, size);
+        // memcpy(payload + read, buf, size);
+        strcat(payload, buf);
+        read += size;
+	}
+
+    pthread_rwlock_wrlock(&rwlock);
+    node_init(&cache, uri, payload, read);
+    pthread_rwlock_unlock(&rwlock);
+	return;
 }

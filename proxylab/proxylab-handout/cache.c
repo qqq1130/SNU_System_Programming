@@ -3,7 +3,7 @@
 
 /* functions about cache */
 void cache_init(cache_t *cache) {
-    Sem_init(&cache->sem_queue, 1, 0);
+    Sem_init(&cache->sem_queue, 1, 1);
     cache->head = NULL;
     cache->tail = NULL;
     cache->cache_size = 0;
@@ -59,6 +59,9 @@ void requeue(cache_t *cache, node_t *target) {
 }
 
 void node_init(cache_t *cache, char *uri, char *buf, size_t buf_size) {
+    if (buf_size > MAX_OBJECT_SIZE) {
+        return;
+    }
     node_t *new_node = Malloc(sizeof(node_t));
     strcpy(new_node->uri, uri);
     new_node->obj = Malloc(buf_size);
