@@ -18,4 +18,4 @@ Implementing kernel modules which
 # Proxy Lab
 Implementing proxy server which provides
 1. redirection of the request to the original remote server if the requested web page is not cached
-2. caching when the requested web page is cached
+2. the cached web page when the requested web page is cached
