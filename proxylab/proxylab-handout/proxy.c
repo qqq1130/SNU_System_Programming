@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 #include "csapp.h"
 #include "cache.h"
 
@@ -14,6 +15,8 @@ void parse_uri(char *uri, char **host, char **port, char **path);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
+static cache_t cache;
+static pthread_rwlock_t rwlock;
 
 int main(int argc, char* argv[]) {
     int listenfd;
@@ -27,6 +30,9 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
 		exit(1);
     }
+
+    cache_init(&cache);
+    pthread_rwlock_init(&rwlock, NULL);
 
     listenfd = Open_listenfd(argv[1]);
 
@@ -54,22 +60,33 @@ void proxy(int client_fd) {
     char buf[MAXBUF];
     char uri[MAXURI];
     char header[MAX_OBJECT_SIZE];
+    char cache_buf[MAX_OBJECT_SIZE];
     char http_method[16];
     char http_version[16];
     char *host;
     char *port;
     char *path;
-    char *temp;
     int server_fd;
-    int stat_code;
     int host_header_exists = 0;
     ssize_t n;
+    ssize_t response_size = 0;
 
     Rio_readinitb(&client_rio, client_fd);
     if (!Rio_readlineb(&client_rio, buf, MAXBUF)) {
         return; /* reading client request failed */
     }
     sscanf(buf, "%s %s %s", http_method, uri, http_version);
+
+    /* check if given uri exist inside the cache */
+    pthread_rwlock_rdlock(&rwlock);
+    node_t *temp_node;
+    if (!(temp_node = search_cache(&cache, uri))) {
+        /* if cache hit */
+        Rio_writen(client_fd, temp_node->obj, temp_node->obj_size);
+        pthread_rwlock_unlock(&rwlock);
+        return;
+    }
+    pthread_rwlock_unlock(&rwlock);
 
     parse_uri(uri, &host, &port, &path);
 
@@ -104,17 +121,27 @@ void proxy(int client_fd) {
     while ((n = Rio_readlineb(&server_rio, buf, MAXBUF))) {
 		Rio_writen(client_fd, buf, n);
 
+        if (response_size + n + 1 <= MAX_OBJECT_SIZE) {
+            strcpy(cache_buf + response_size, buf);
+        }
+        response_size += n;
+
 		if (!strncmp(buf, "\r\n", 2)) {
             break;
         }
 	}
-
+    /* add to cache */
+    pthread_rwlock_wrlock(&rwlock);
+    if (response_size <= MAX_OBJECT_SIZE) {
+        node_init(&cache, uri, cache_buf, response_size);
+    }
+    pthread_rwlock_unlock(&rwlock);
     Close(server_fd);
 }
 
 void parse_uri(char *uri, char **host, char **port, char **path) {
     static const char *http = "http://";
-    static const char *default_port = "80";
+    static char *default_port = "80";
     char *next_ptr;
 
     *host = uri + strlen(http);

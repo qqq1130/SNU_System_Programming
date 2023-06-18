@@ -156,6 +156,7 @@ if [ ! -x ./tiny/tiny ]
 then 
     echo "Building the tiny executable."
     (cd ./tiny; make)
+    cd ..
     echo ""
 fi
 
