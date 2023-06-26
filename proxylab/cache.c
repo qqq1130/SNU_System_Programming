@@ -74,11 +74,16 @@ void node_init(cache_t *cache, char *uri, char *path, char *buf, size_t buf_size
     if (buf_size > MAX_OBJECT_SIZE) {
         return;
     }
+
+    uri_len = strlen(uri);
+    path_len = strlen(path);
+
+
     node_t *new_node = Malloc(sizeof(node_t));
-    new_node->uri = Malloc(strlen(uri));
-    new_node->path = Malloc(strlen(path));
-    strcpy(new_node->uri, uri);
-    strcpy(new_node->path, path);
+    new_node->uri = Malloc(uri_len);
+    new_node->path = Malloc(path_len);
+    strncpy(new_node->uri, uri, uri_len);
+    strncpy(new_node->path, path_len);
     new_node->obj = Malloc(buf_size);
     strncpy(new_node->obj, buf, buf_size);
     new_node->obj_size = buf_size;
